@@ -1,4 +1,4 @@
-this example is about problem solving if we need to determine if there is repeated element in a given array 
+//this example is about problem solving if we need to determine if there is repeated element in a given array 
 #include <stdio.h>
 #include <stdint.h>
 
