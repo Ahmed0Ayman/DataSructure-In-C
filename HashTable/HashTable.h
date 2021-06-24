@@ -22,6 +22,18 @@
 #include <stdint.h>
 
 
+/* macro for check memory allocation return value */
+#define CHECK_MEMORYALLOC(X)    		\
+{										\
+if((X)  == NULL){						\
+printf("fail to allocate memory \n");	\
+return -2 ;								\
+}										\
+}										\
+
+
+
+
 /* macro to define the required length for hash table */
 #define HashTableLen 50
 
@@ -45,7 +57,7 @@ bool HashTable_GenKey(char * Value ,uint32_t  * Key );
 
 
 /* free the required entry */
-bool HashTable_FreeEntry(HT_t * Table , Entry_t ** Item);
+bool HashTable_FreeKey(HT_t * Table , uint32_t index );
 
 
 /* free all table */
@@ -53,7 +65,7 @@ bool HashTable_Free(HT_t * Table);
 
 
 /* search for specific entry by specific value */
-Entry_t ** HashTable_ItemSearch(HT_t * Table , char * Value , uint32_t * Key_Index );
+Entry_t * HashTable_ItemSearch(HT_t * Table , char * Value , uint32_t * Key_Index );
 
 
 /* insert a new item to hash table */

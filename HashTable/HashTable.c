@@ -34,9 +34,8 @@ struct _Entry
 /* create a new Hash table and return handle to it */
 HT_t * HashTable_Create(void)
 {
-    HT_t * Hash = malloc(sizeof(HT_t));  /* allocate memory for the Hash table data structure */
-    if(Hash == NULL) /* check for available heap */
-    return NULL ;
+    HT_t * Hash = NULL ;
+    CHECK_MEMORYALLOC(Hash = malloc(sizeof(HT_t)));  /* allocate memory for the Hash table data structure */
 
     /* initialize Hash data members */
     Hash->Totalsize = HashTableLen ;
@@ -47,7 +46,7 @@ HT_t * HashTable_Create(void)
     Hash->HashTable_Entries = calloc(HashTableLen,sizeof(Entry_t *));
 
     if(Hash->HashTable_Entries == NULL) /* check for available heap */
-    return NULL ;
+    	return NULL ;
 
 
     return Hash ;  /* return Hash handler */
@@ -60,13 +59,13 @@ HT_t * HashTable_Create(void)
 bool HashTable_GenKey(char * Value ,uint32_t  * Key )
 {
     if((Value == NULL )||(strlen(Value) == 0 ))   /* check parameter validity */
-    return false ;
+    	return false ;
 
     uint32_t Temp_Key = 0 ;
 
     for(int i =0 ; i< strlen(Value);i++)   /* generate random key */
     {
-        Temp_Key = Temp_Key * 39 + Value[i] ;
+        Temp_Key = Temp_Key *(HashTableLen*3) + Value[i] ;
     }
 
     Temp_Key %= HashTableLen ;
@@ -78,41 +77,38 @@ bool HashTable_GenKey(char * Value ,uint32_t  * Key )
 
 
 
-/* free the required entry */
-bool HashTable_FreeEntry(HT_t * Table , Entry_t ** Item)
-{
+/* free the required all associate key Values  */
+bool HashTable_FreeKey(HT_t *Table, uint32_t index) {
 
-    if(((*Item) == NULL )||(Table == NULL))  /* check parameter validity */
-    return false ;
+	if (Table == NULL) /* check parameter validity */
+		return false;
 
-    bool Entry_exist = false ;   /* variable for check exist of entry */
+	Entry_t *Curr_entry = Table->HashTable_Entries[index], *Next_enrty = NULL;
+	bool Entry_exist = false; /* variable for check exist of entry */
 
+	if (Curr_entry != NULL) /* if exist then free memory */
+	{
+		do {
 
-    /* loop on all exist entries */
-    for(int i =0 ;i< HashTableLen;i++)
-    {
-    	if(Table->HashTable_Entries[i] == (*Item))     /* check if this is valid entry */
-    	{
-    	Entry_exist = true  ;
-    	break ;
-    	}
-    }
+			Next_enrty = Curr_entry->Next; /* hold the next entry address */
+			/* first free item member */
+			free(Curr_entry->Key);
+			free(Curr_entry->Value);
 
-    if(Entry_exist == true )    /* if exist then free memory */
-    {
-    /* first free item member */
-    free((*Item)->Key);
-    free((*Item)->Value);
+			/* Now we can free item */
+			free(Curr_entry);
+			Curr_entry = Next_enrty;
+			Table->CurrentSize--; /* decrement  currentsize var with each new insertion */
 
-    /* Now we can free item */
-    free(*Item) ;
+		} while (Curr_entry != NULL);
+		Table->HashTable_Entries[index] = NULL; /* assign to null */
 
-    *Item = NULL ;		/* assign null to item to avoid dangling pointers */
-    Table->CurrentSize-- ;			/* decrement  currentsize var with each new insertion */
-    return true ;
-    }else{   			/* if not exist then return false to caller */
-    	return false ;
-    }
+	}
+	else
+	{ /* if not exist then return false to caller */
+		return false;
+	}
+
 }
 
 
@@ -125,11 +121,16 @@ bool HashTable_Free(HT_t * Table)
     if(Table == NULL )		/* check parameter validity */
     return false ;
 
-    for(uint32_t i =0 ; i < HashTableLen ;i++)
-    {
-        if(Table->HashTable_Entries[i] != NULL)
-        HashTable_FreeEntry(Table , &(Table->HashTable_Entries[i]));
+    Entry_t ** entry = NULL ;
 
+    for(uint32_t i =0 ; i < HashTableLen ;i++) /* iterate on all Hash table elements */
+    {
+    	*entry = &Table->HashTable_Entries[i] ;
+        if(*entry != NULL)
+        {
+        	HashTable_FreeKey(Table , i);  /* free all entries associated  with this key */
+
+        }
     }
 
     return true ;
@@ -139,24 +140,43 @@ bool HashTable_Free(HT_t * Table)
 
 
 /* search for specific entry by specific value */
-Entry_t ** HashTable_ItemSearch(HT_t * Table , char * Value , uint32_t  * Key_Index )
+Entry_t * HashTable_ItemSearch(HT_t * Table , char * Value , uint32_t  * Key_Index )
 {
     if((Table == NULL)||(Value == NULL)||(strlen(Value)==0))  		/* check parameter validity */
-    return NULL ;
+    	return NULL ;
 
     uint32_t Temp_Key =0 ;
+    Entry_t * entry  = NULL ;
     HashTable_GenKey(Value,&Temp_Key);
-    if(!(strcmp(Table->HashTable_Entries[Temp_Key]->Value ,Value)))
-    {
-    printf("the Value is located in the table with index %d \n ",Temp_Key);
+	entry = Table->HashTable_Entries[Temp_Key] ;
+	if(entry == NULL)
+	{
+		printf("this value %s not in the table \n",Value );
+		return NULL ;
+	}
+    do{
+		if(!(strcmp(entry->Value ,Value)))
+		{
+		printf("the Value %s is located in the table with index %d \n ",Value ,Temp_Key);
 
-    *Key_Index = Temp_Key ;		/* return key to caller */
+		*Key_Index = Temp_Key ;		/* return key to caller */
 
-    return &(Table->HashTable_Entries[Temp_Key]) ;
-    }else{
-    printf("this value %s is not exist \n",Value );
-    return NULL ;
-    }
+		return entry ;
+
+		}
+		else
+		{
+			if(entry->Next != NULL)
+			{
+				entry = entry->Next ;
+			}
+			else
+			{
+				printf("not exist %s\n",Value);
+				return NULL;
+			}
+		}
+    }while(entry->Next != NULL);
 
 
 
@@ -168,34 +188,53 @@ Entry_t ** HashTable_ItemSearch(HT_t * Table , char * Value , uint32_t  * Key_In
 bool HashTable_InsertItem(HT_t * Table ,char * Value , uint32_t * Key)
 {
     if((Table == NULL )||(Value == NULL)||(strlen(Value) == 0 )) 		/* check parameter validity */
-    return false ;
+    	return false ;
 
     uint32_t Temp_Key =0 ;
-    Entry_t * entry ;		/* Temp entry to facilitate handling the entry */
+    Entry_t * entry,*Temp_entry ;		/* Temp entry to facilitate handling the entry */
 
     HashTable_GenKey(Value , & Temp_Key );
 
     *Key = Temp_Key ; 		/* return Generated Key to caller */
 
     entry = Table->HashTable_Entries[Temp_Key];
-    if(entry == NULL)
+
+
+    if(entry == NULL) /* means that first entry assigned to the Key */
     {
-    	entry = malloc(sizeof(Entry_t));
-        entry->Key    =  malloc(sizeof(uint32_t));
-        entry->Value  =  malloc(strlen(Value)+1);
+    	CHECK_MEMORYALLOC(entry = malloc(sizeof(Entry_t)));
+    	CHECK_MEMORYALLOC(entry->Key = malloc(sizeof(uint32_t)));
+    	CHECK_MEMORYALLOC(entry->Value = malloc(strlen(Value)+1));
+
 
         *(entry->Key) = Temp_Key ;
         strcpy(entry->Value,Value);
         entry->Next = NULL ;
         Table->HashTable_Entries[Temp_Key] = entry ;
-        Table->CurrentSize++ ;			/* increment currentsize var with each new insertion */
+    }
+    else
+    { /* use linked list to link a new entry */
+    	CHECK_MEMORYALLOC(Temp_entry = malloc(sizeof(Entry_t)));
+    	CHECK_MEMORYALLOC(Temp_entry->Key = malloc(sizeof(uint32_t)));
+    	CHECK_MEMORYALLOC(Temp_entry->Value = malloc(strlen(Value)+1));
 
-        return true ;
-    }else{
-        printf("this Value = %s , already is exist \n",Value);		 /* indication that this value is stored before */
-        return false ;
+    	/* initialize the new entry */
+    	*(Temp_entry->Key) = Temp_Key ;
+    	Temp_entry->Next = NULL ;
+        strcpy(Temp_entry->Value,Value);
+
+    	while(entry->Next != NULL) /* iterate till the end of the list */
+    		entry = entry->Next ;
+
+    	entry->Next = Temp_entry ;
+
     }
 
+
+
+
+    Table->CurrentSize++ ;			/* increment current size var with each new insertion */
+    return true ;
 
 
 }
@@ -209,17 +248,24 @@ bool HashTable_Printall(HT_t * Table)
     if(Table == NULL )		/* check parameter validity */
     return false ;
 
+    Entry_t * entry;
+
+
     for(uint32_t i =0 ; i < HashTableLen ;i++)		/* loop on all hash table entries */
     {
-        if(Table->HashTable_Entries[i] != NULL)
+    	entry = Table->HashTable_Entries[i] ;
+        if(entry != NULL)
         {
-        	printf( "Table->HashTable[%d]->Key = %d \n",i,*(Table->HashTable_Entries[i]->Key) );
-        	printf( "Table->HashTable[%d]->Value = %s \n",i,Table->HashTable_Entries[i]->Value );
+        	do{
+				printf( "Table->HashTable[%d]->Key = %d \n",i,*(entry->Key) );
+				printf( "Table->HashTable[%d]->Value = %s \n",i,entry->Value );
+				if(entry->Next != NULL) entry = entry->Next ;
+        	}while(entry->Next != NULL);
+
         }
     }
 
     return true ;
 
 }
-
 
